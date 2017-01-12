@@ -55,14 +55,6 @@ def get_deployment_plan():
     return _get_plan("deploy")
 
 
-def get_sidecar_plan():
-    return _get_plan("sidecar")
-
-
-def start_sidecar_plan():
-    return dcos.http.post(shakedown.dcos_service_url(PACKAGE_NAME) + "/v1/plans/sidecar/start")
-
-
 def _get_plan(plan):
     def fn():
         try:
@@ -153,31 +145,6 @@ def _nested_dict_merge(a, b, path=None):
         else:
             a[key] = b[key]
     return a
-
-
-def get_marathon_config():
-    response = dcos.http.get(marathon_api_url('apps/{}/versions'.format(PACKAGE_NAME)))
-    assert response.status_code == 200, 'Marathon versions request failed'
-
-    last_index = len(response.json()['versions']) - 1
-    version = response.json()['versions'][last_index]
-
-    response = dcos.http.get(marathon_api_url('apps/{}/versions/{}'.format(PACKAGE_NAME, version)))
-    assert response.status_code == 200
-
-    config = response.json()
-    del config['uris']
-    del config['version']
-
-    return config
-
-
-def marathon_api_url(basename):
-    return '{}/v2/{}'.format(shakedown.dcos_service_url('marathon'), basename)
-
-
-def marathon_api_url_with_param(basename, path_param):
-    return '{}/{}'.format(marathon_api_url(basename), path_param)
 
 
 def request(request_fn, *args, **kwargs):
