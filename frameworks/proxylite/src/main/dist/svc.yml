@@ -1,6 +1,7 @@
 name: "proxylite"
 principal: "proxylite-principal"
 zookeeper: master.mesos:2181
+web-url: http://proxylite-0-server.proxylite.mesos:4040
 api-port: {{PORT0}}
 pods:
   web:

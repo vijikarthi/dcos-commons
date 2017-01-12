@@ -47,7 +47,7 @@ public class ServiceSpecTest {
     }
 
     @Test
-    public void test_yml_base() throws Exception {
+    public void testYml() throws Exception {
         deserializeServiceSpec("svc.yml");
         validateServiceSpec("svc.yml");
     }
