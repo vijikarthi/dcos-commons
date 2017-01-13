@@ -3,28 +3,20 @@
 import shutil
 import sys
 
-#cfg_fmtstr="""\
-#frontend myvhost_frontend
-#    bind *:{port}
-#    mode http
-#    use_backend myvhost_backend
-#
-#backend myvhost_backend
-#    mode http
-#    balance roundrobin
-#    option forwardfor
-#    http-request set-header X-Forwarded-Port %[dst_port]
-#    http-request add-header X-Forwarded-Proto https if {{ ssl_fc }}
-#{servers}
-#"""
+acl_fmtstr="""    acl {aclname} path_beg {externalroute}
+"""
+
+use_backend_fmtstr="""    use_backend {backendname} if {aclname}
+"""
 
 cfg_frontend_fmtstr="""\
-frontend myfrontend
+frontend proxylite_frontend
     bind *:{port}
     mode http
 {acl}
 {use_backend}
     default_backend {default_backend}
+
 """
 
 cfg_backend_fmtstr="""\
@@ -35,63 +27,175 @@ backend {name}
     http-request set-header X-Forwarded-Port %[dst_port]
     http-request add-header X-Forwarded-Proto https if {{ ssl_fc }}
     http-request set-header Host {hostname}
-    reqirep  "^([^ :]*)\ {incomingpath}/?(.*)" "\1\ {outgoingpath}/\2"
-    server {name}x {fullhost}
+    reqirep  "^([^ :]*)\ {incomingpath}/?(.*)" "\\1\ {outgoingpath}/\\2"
+    server x{name}x {fullhost}
+
 """
 
-#"""
-#backend myvhost_backend
-#    mode http
-#    balance roundrobin
-#    option forwardfor
-#    http-request set-header X-Forwarded-Port %[dst_port]
-#    http-request add-header X-Forwarded-Proto https if {{ ssl_fc }}
-#{servers}
-#
-#frontend myvhost_frontend
-#    bind *:4040
-#    mode http
-#    acl acl1 path_beg /google
-#    acl acl2 path_beg /example
-#    use_backend myvhost_backend if acl1
-#    use_backend example_backend if acl2
-#
-#
-#backend myvhost_backend
-#    mode http
-#    balance roundrobin
-#    option forwardfor
-#    http-request set-header X-Forwarded-Port %[dst_port]
-#    http-request add-header X-Forwarded-Proto https if { ssl_fc }
-#    server bob google.com:80
-#
-#backend example_backend
-#    mode http
-#    balance roundrobin
-#    option forwardfor
-#    http-request set-header X-Forwarded-Port %[dst_port]
-#    http-request add-header X-Forwarded-Proto https if { ssl_fc }
-#    server bobo example.com:80
-#"""
-#server 1.b-h google.com:80
-#server 2 example.com:80
-
 def main():
-    raw_cfg_path = sys.argv[1]
-    cfg_path = sys.argv[2]
-    port = sys.argv[3]
-    backends = sys.argv[4]
+    log("starting")
 
-    # shutil.copyfile(raw_cfg_path, cfg_path)
+    selfname = sys.argv[1]
+    raw_cfg_path = sys.argv[2]
+    cfg_path = sys.argv[3]
+    proxyport = sys.argv[4]
+    externalroutes = sys.argv[5]
+    internalroutes = sys.argv[6]
 
-    # # 
+    log("copying {} to {}".format(raw_cfg_path, cfg_path))
+    shutil.copyfile(raw_cfg_path, cfg_path)
 
-    # # XXX make the default backend the first backend
-    # cfg_str = cfg_fmtstr.format(port=port, servers="    "+backends)
+    log("verifying config")
+    c = ConfigMaker(proxyport, externalroutes, internalroutes)
+    if not c.valid:
+        crash("invalid config")
 
-    # with open(cfg_path, "a") as f:
-    #         f.write(cfg_str)
-    #         f.flush()
+    log("generating config")
+    cfg_str = c.generate()
+
+    log("writing config to {}".format(cfg_path))
+    with open(cfg_path, "a") as f:
+            f.write(cfg_str)
+            f.flush()
+
+    log("done")
+
+class Config(object):
+    def __init__(self):
+        self.proxyport = None
+
+        self.externalpath = {}
+        self.internalpath = {}
+        self.internalport = {}
+        self.internalhost = {}
+
+        self.default_backend = None # This a key
+        self.keys = []
+
+class ConfigMaker(object):
+    """
+    What we need:
+    port proxylite binds to (4040)
+    what path to expose (/google_fake)
+    what path to proxy to (/fake)
+    the hostname we proxy to (google.com)
+    the port to proxy to (80)
+
+    proposed input:
+    PROXY_PORT=4040
+    EXTERNAL_ROUTES=/v1,/google,/example
+    INTERNAL_ROUTES=web-0-server.proxylite.mesos:4041/myapp,google.com:80/mygoog,example.com:80/myapp
+    """
+    def __init__(self, proxyport, externalroutes, internalroutes):
+        self.valid = False
+        self.c = Config()
+
+        allargs = [externalroutes, internalroutes]
+        if not self.v_numargs(allargs):
+            return
+        if not self.unpack(proxyport, externalroutes, internalroutes):
+            return
+
+        # Always last
+        self.valid = True
+
+    def unpack(self, proxyport, externalroutes, internalroutes):
+        """
+        Return True if successful, false otherwise
+        """
+        self.c.proxyport = proxyport
+        keys = self.mk_keys(internalroutes)
+
+        self.c.keys = keys
+        self.c.default_backend = keys[0]
+
+        for i, exr in list(enumerate(externalroutes.split(","))):
+            k = keys[i]
+            self.c.externalpath[k] = exr
+
+        for i, inr in list(enumerate(internalroutes.split(","))):
+            k = keys[i]
+            hostname, port, path = self.parse_inr(inr)
+            self.c.internalhost[k] = hostname
+            self.c.internalport[k] = port
+            self.c.internalpath[k] = path
+        return True
+
+    def parse_inr(self, inr):
+        portsplit = inr.split(":", 1)
+        if len(portsplit) == 1:
+            # No :
+            routesplit = inr.split("/", 1)
+            if len(routesplit) == 2:
+                # No : yes /
+                return (routesplit[0], "", "/{}".format(routesplit[1]))
+            # No : No /
+            return (routesplit[0], "", "")
+        # Yes :
+        routesplit = portsplit[1].split("/")
+        if len(routesplit) == 1:
+            # Yes : No /
+            return (portsplit[0], portsplit[1], "")
+        # Yes : Yes /
+        return (portsplit[0], routesplit[0], "/{}".format(routesplit[1]))
+
+    def mk_keys(self, internalroutes):
+        keys = []
+        for s in internalroutes.split(","):
+            keys.append(s.replace("/", "-_"))
+        return keys
+
+    def generate(self):
+        """
+        Returns the entire config as a string
+        """
+
+        acl_str = ""
+        use_backend_str = ""
+
+        for i, k in list(enumerate(self.c.keys)):
+            aclname = "acl{}".format(i)
+            exr = self.c.externalpath[k]
+            acl_str += acl_fmtstr.format(aclname=aclname, externalroute=exr)
+            use_backend_str += use_backend_fmtstr.format(backendname=k, aclname=aclname)
+
+        cfg_frontend_str = cfg_frontend_fmtstr.format(port=self.c.proxyport,
+                acl=acl_str,
+                use_backend=use_backend_str,
+                default_backend=self.c.default_backend)
+
+        cfg_backend_str = ""
+        for k in self.c.keys:
+            fullhost = "{}:{}".format(self.c.internalhost[k], self.c.internalport[k])
+            cfg_backend_str += cfg_backend_fmtstr.format(name=k,
+                    hostname=self.c.internalhost[k],
+                    incomingpath=self.c.externalpath[k],
+                    outgoingpath=self.c.internalpath[k],
+                    fullhost=fullhost)
+
+        return "\n{}\n{}".format(cfg_frontend_str, cfg_backend_str)
+
+    def v_numargs(self, allargs):
+        length = len(allargs[0].split(","))
+        for s in allargs:
+            if len(s.split(",")) != length:
+                log("args have inconsistent length csv")
+                return False
+        return True
+
+
+def log(msg):
+    scriptname = sys.argv[0]
+    selfname = sys.argv[1]
+    logname = "[{} {}]".format(selfname, scriptname)
+    print("{}: {}".format(logname, msg))
+
+def crash(msg, exitcode=1):
+    scriptname = sys.argv[0]
+    selfname = sys.argv[1]
+    logname = "[{} {}]".format(selfname, scriptname)
+    print("{}: {}".format(logname, msg))
+    sys.exit(exitcode)
 
 if __name__ == "__main__":
     main()

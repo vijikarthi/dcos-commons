@@ -19,20 +19,19 @@ pods:
            port: 4041
   proxylite:
     container:
-      image-name: nlsun/proxylite # Put this in the real Mesosphere account
+      image-name: nlsun/proxylite:prod # Put this in the real Mesosphere account
     count: 1
     tasks:
       server:
         goal: RUNNING
-        cmd: "chmod 755 /proxylite/run.sh && /proxylite/run.sh"
+        cmd: "/proxylite/run.sh"
         cpus: {{PROXY_LITE_CPUS}}
         memory: {{PROXY_LITE_MEM}}
         ports:
          - name: PROXY
            port: 4040
         env:
-          BACKENDS: {{BACKENDS}}
-          SCHEDULER_PORT: {{PORT0}}
-        configurations:
-         - template: "{{CONFIG_TEMPLATE_PATH}}/haproxy.cfg"
-           dest: /proxylite/haproxy.cfg
+          PROXY_PORT: 4040
+          EXTERNAL_ROUTES: "/v1,/httpd,/google,/example"
+          INTERNAL_ROUTES: "proxylite.marathon.mesos:{{PORT0}}/v1,web-0-server.proxylite.mesos:4041,google.com:80,example.com:80"
+
