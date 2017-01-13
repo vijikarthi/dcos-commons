@@ -11,6 +11,7 @@ use_backend_fmtstr="""    use_backend {backendname} if {aclname}
 
 cfg_frontend_fmtstr="""\
 frontend proxylite_frontend
+    option httplog
     bind *:{port}
     mode http
 {acl}

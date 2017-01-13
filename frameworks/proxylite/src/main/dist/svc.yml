@@ -19,7 +19,7 @@ pods:
            port: 4041
   proxylite:
     container:
-      image-name: nlsun/proxylite:prod # Put this in the real Mesosphere account
+      image-name: nlsun/proxylite:0.0.1 # Put this in the real Mesosphere account
     count: 1
     tasks:
       server:
@@ -28,10 +28,9 @@ pods:
         cpus: {{PROXY_LITE_CPUS}}
         memory: {{PROXY_LITE_MEM}}
         ports:
-         - name: PROXY
+         - name: PROXYLITE
            port: 4040
         env:
-          PROXY_PORT: 4040
           EXTERNAL_ROUTES: "/v1,/httpd,/google,/example"
           INTERNAL_ROUTES: "proxylite.marathon.mesos:{{PORT0}}/v1,web-0-server.proxylite.mesos:4041,google.com:80,example.com:80"
 

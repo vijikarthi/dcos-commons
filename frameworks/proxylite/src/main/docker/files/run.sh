@@ -17,6 +17,11 @@ if [ -z ${OVERRIDE_RAW_CFG+x} ]; then
 else
     ARG_OVERRIDE_RAW_CFG=true
 fi
+if [ -z ${NO_RUN_PROXY+x} ]; then
+    ARG_NO_RUN_PROXY=false
+else
+    ARG_NO_RUN_PROXY=true
+fi
 set -u
 
 if [ "$ARG_OVERRIDE_CFG" = "true" ]; then
@@ -45,10 +50,17 @@ if [ "${ARG_OVERRIDE_CFG}" = "false" ]; then
         "$SELFNAME" \
         "$RAWHAPROXYCFG" \
         "$HAPROXYCFG" \
-        "$PROXY_PORT" \
+        "$PORT_PROXYLITE" \
         "$EXTERNAL_ROUTES" \
         "$INTERNAL_ROUTES"
 fi
 
-echo "$LOGNAME: RUNNING HAPROXY" >&2
-"$(which haproxy-systemd-wrapper)" -p /run/haproxy.pid -f "$HAPROXYCFG"
+if [ "${ARG_NO_RUN_PROXY}" = "true" ]; then
+    echo "$LOGNAME: SLEEPING FOREVER" >&2
+    set +x
+    while :; do sleep 0.5; done
+    set -x
+else
+    echo "$LOGNAME: RUNNING HAPROXY" >&2
+    "$(which haproxy-systemd-wrapper)" -p /run/haproxy.pid -f "$HAPROXYCFG"
+fi
