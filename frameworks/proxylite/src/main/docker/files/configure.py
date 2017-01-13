@@ -16,7 +16,6 @@ frontend proxylite_frontend
     mode http
 {acl}
 {use_backend}
-    default_backend {default_backend}
 
 """
 
@@ -70,7 +69,6 @@ class Config(object):
         self.internalport = {}
         self.internalhost = {}
 
-        self.default_backend = None # This a key
         self.keys = []
 
 class ConfigMaker(object):
@@ -108,7 +106,6 @@ class ConfigMaker(object):
         keys = self.mk_keys(internalroutes)
 
         self.c.keys = keys
-        self.c.default_backend = keys[0]
 
         for i, exr in list(enumerate(externalroutes.split(","))):
             k = keys[i]
@@ -162,8 +159,7 @@ class ConfigMaker(object):
 
         cfg_frontend_str = cfg_frontend_fmtstr.format(port=self.c.proxyport,
                 acl=acl_str,
-                use_backend=use_backend_str,
-                default_backend=self.c.default_backend)
+                use_backend=use_backend_str)
 
         cfg_backend_str = ""
         for k in self.c.keys:

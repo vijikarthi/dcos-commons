@@ -19,7 +19,7 @@ pods:
            port: 4041
   proxylite:
     container:
-      image-name: nlsun/proxylite:0.0.1 # Put this in the real Mesosphere account
+      image-name: nlsun/proxylite:0.0.2 # Put this in the real Mesosphere account
     count: 1
     tasks:
       server:
