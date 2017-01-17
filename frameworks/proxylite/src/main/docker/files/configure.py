@@ -14,7 +14,9 @@ frontend proxylite_frontend
     option httplog
     bind *:{port}
     mode http
+    acl acl_root_redirect path /
 {acl}
+    redirect prefix {root_redirect} code 301 if acl_root_redirect
 {use_backend}
 
 """
@@ -41,12 +43,13 @@ def main():
     proxyport = sys.argv[4]
     externalroutes = sys.argv[5]
     internalroutes = sys.argv[6]
+    rootredirect = sys.argv[7]
 
     log("copying {} to {}".format(raw_cfg_path, cfg_path))
     shutil.copyfile(raw_cfg_path, cfg_path)
 
     log("verifying config")
-    c = ConfigMaker(proxyport, externalroutes, internalroutes)
+    c = ConfigMaker(proxyport, externalroutes, internalroutes, rootredirect)
     if not c.valid:
         crash("invalid config")
 
@@ -63,6 +66,7 @@ def main():
 class Config(object):
     def __init__(self):
         self.proxyport = None
+        self.rootredirect = None
 
         self.externalpath = {}
         self.internalpath = {}
@@ -85,24 +89,25 @@ class ConfigMaker(object):
     EXTERNAL_ROUTES=/v1,/google,/example
     INTERNAL_ROUTES=web-0-server.proxylite.mesos:4041/myapp,google.com:80/mygoog,example.com:80/myapp
     """
-    def __init__(self, proxyport, externalroutes, internalroutes):
+    def __init__(self, proxyport, externalroutes, internalroutes, rootredirect):
         self.valid = False
         self.c = Config()
 
         allargs = [externalroutes, internalroutes]
         if not self.v_numargs(allargs):
             return
-        if not self.unpack(proxyport, externalroutes, internalroutes):
+        if not self.unpack(proxyport, externalroutes, internalroutes, rootredirect):
             return
 
         # Always last
         self.valid = True
 
-    def unpack(self, proxyport, externalroutes, internalroutes):
+    def unpack(self, proxyport, externalroutes, internalroutes, rootredirect):
         """
         Return True if successful, false otherwise
         """
         self.c.proxyport = proxyport
+        self.c.rootredirect = rootredirect
         keys = self.mk_keys(internalroutes)
 
         self.c.keys = keys
@@ -159,7 +164,8 @@ class ConfigMaker(object):
 
         cfg_frontend_str = cfg_frontend_fmtstr.format(port=self.c.proxyport,
                 acl=acl_str,
-                use_backend=use_backend_str)
+                use_backend=use_backend_str,
+                root_redirect=self.c.rootredirect)
 
         cfg_backend_str = ""
         for k in self.c.keys:

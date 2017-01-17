@@ -52,7 +52,8 @@ if [ "${ARG_OVERRIDE_CFG}" = "false" ]; then
         "$HAPROXYCFG" \
         "$PORT_PROXYLITE" \
         "$EXTERNAL_ROUTES" \
-        "$INTERNAL_ROUTES"
+        "$INTERNAL_ROUTES" \
+        "$ROOT_REDIRECT"
 fi
 
 if [ "${ARG_NO_RUN_PROXY}" = "true" ]; then
