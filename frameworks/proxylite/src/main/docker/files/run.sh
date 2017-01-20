@@ -54,6 +54,7 @@ if [ "${ARG_OVERRIDE_CFG}" = "false" ]; then
         "$EXTERNAL_ROUTES" \
         "$INTERNAL_ROUTES" \
         "$ROOT_REDIRECT"
+    cp "$HAPROXYCFG" /mnt/mesos/sandbox
 fi
 
 if [ "${ARG_NO_RUN_PROXY}" = "true" ]; then

@@ -16,7 +16,7 @@ frontend proxylite_frontend
     mode http
     acl acl_root_redirect path /
 {acl}
-    redirect prefix {root_redirect} code 301 if acl_root_redirect
+    redirect prefix {root_redirect} code 307 if acl_root_redirect
 {use_backend}
 
 """
@@ -30,6 +30,8 @@ backend {name}
     http-request add-header X-Forwarded-Proto https if {{ ssl_fc }}
     http-request set-header Host {hostname}
     reqirep  "^([^ :]*)\ {incomingpath}/?(.*)" "\\1\ {outgoingpath}/\\2"
+    acl hdr_location res.hdr(Location) -m found
+    rspirep ^Location:\ (https?://{hostname}(:[0-9]+)?)?(/.*) Location:\ {incomingpath}\\3 if hdr_location
     server x{name}x {fullhost}
 
 """
